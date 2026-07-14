@@ -111,6 +111,8 @@ docker-compose.yml
 - Mutation → Server Action → `revalidatePath()`; không tự fetch lại bằng `useEffect`.
 - Query Prisma **luôn kèm điều kiện phạm vi** (`where: { project: { members: { some: { userId } } } }`), không lọc quyền ở tầng JS sau khi đã lấy hết dữ liệu.
 - Lỗi nghiệp vụ trả về dạng `{ ok: false, error: "..." }` để form hiển thị, không throw ra 500.
+- **Xử lý lỗi tập trung bằng wrapper `safeAction()`** (`lib/actions/safe-action.ts`): bọc mọi Server Action, bắt `ForbiddenError`/`ZodError` và format về `{ ok: false, error }` thống nhất — không try/catch lặp lại trong từng action.
+- **Mọi màn hình danh sách phải đủ 3 trạng thái**: loading (`loading.tsx` với skeleton đúng hình dạng nội dung), error (`error.tsx`), và empty state có hướng dẫn hành động tiếp theo.
 - Component đặt tên tiếng Anh; text hiển thị cho người dùng bằng **tiếng Việt**.
 - Không commit `.env`. Mẫu biến môi trường để ở `.env.example`.
 
@@ -194,3 +196,4 @@ Quy trình mỗi lần bắt đầu: `npm run db:up` → đợi healthcheck xanh
 5. Cập nhật tiến độ % (Dev) + đồng bộ status.
 6. Comment + đính kèm file/ảnh (mọi role).
 7. Dashboard PM xem hàng ngày (task quá hạn, tiến độ trung bình theo project).
+8. Audit log: bảng `ActivityLog` ghi từ trong action các thao tác quan trọng (tạo/sửa task, đổi tiến độ, xoá comment) — nuôi luôn mục "hoạt động gần đây" trên dashboard.
