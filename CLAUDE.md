@@ -152,7 +152,7 @@ services:
       POSTGRES_PASSWORD: taskmgmt
       POSTGRES_DB: taskmgmt
     ports:
-      - "5432:5432"
+      - "5433:5432"   # 5433 phía host: máy dev có Postgres cài sẵn chiếm 5432
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -166,7 +166,7 @@ volumes:
 
 `.env`:
 ```
-DATABASE_URL="postgresql://taskmgmt:taskmgmt@localhost:5432/taskmgmt?schema=public"
+DATABASE_URL="postgresql://taskmgmt:taskmgmt@localhost:5433/taskmgmt?schema=public"
 AUTH_SECRET="<openssl rand -base64 32>"
 ```
 

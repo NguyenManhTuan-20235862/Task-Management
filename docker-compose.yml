@@ -8,7 +8,8 @@ services:
       POSTGRES_PASSWORD: taskmgmt
       POSTGRES_DB: taskmgmt
     ports:
-      - "5432:5432"
+      # 5433 phía host vì máy dev có thể có Postgres cài sẵn chiếm 5432
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
