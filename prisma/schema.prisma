@@ -1,8 +1,8 @@
 // Nguồn sự thật duy nhất về data model — CLAUDE.md không copy schema này.
 // Các ràng buộc Prisma KHÔNG enforce được (phải check ở Zod + Server Action):
 //   - Task.assignee phải có User.role = DEV và là thành viên của project chứa task
-//   - Task.progress trong khoảng 0..100; startDate <= dueDate
-//   - PM là thành viên tối đa 2 project (đếm + chèn trong cùng transaction)
+//   - Task.progress trong khoảng 0..100; Task/Project: startDate <= dueDate
+//   - Xoá Dev khỏi project bị chặn nếu Dev còn task trong project đó
 //   - Attachment thuộc đúng 1 trong 2: taskId XOR commentId
 //     (bổ sung CHECK constraint bằng SQL trong migration đầu tiên)
 
@@ -43,6 +43,9 @@ model User {
 model Project {
   id        String          @id @default(cuid())
   name      String
+  // Chỉ lưu ngày (không giờ), cùng quy ước với Task — tránh lệch timezone.
+  startDate DateTime        @db.Date
+  dueDate   DateTime        @db.Date
   creator   User            @relation("projectCreator", fields: [createdBy], references: [id])
   createdBy String // luôn là ADMIN
   members   ProjectMember[]
