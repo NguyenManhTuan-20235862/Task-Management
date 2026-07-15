@@ -22,6 +22,12 @@ export async function requireUser(): Promise<{ user: SessionUser }> {
   return { user: { id: session.user.id, role: session.user.role } };
 }
 
+// Kiểm quyền không gắn với một tài nguyên cụ thể — ví dụ "tạo project" chưa có
+// project nào để tra membership. Chỉ dùng khi không có ID tài nguyên để query DB.
+export function requireRole(user: SessionUser, roles: Role[]): void {
+  if (!roles.includes(user.role)) throw new ForbiddenError();
+}
+
 // Kiểm tra user có quyền trên project không. Role lấy từ session nhưng membership
 // LUÔN query DB tại thời điểm gọi — không tin dữ liệu client, không tin JWT cũ.
 // ADMIN đi qua mọi project; PM/DEV phải là thành viên.
