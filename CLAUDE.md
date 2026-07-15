@@ -33,22 +33,26 @@ Hệ thống quản lý task nội bộ: Admin tạo project, PM tạo task giao
 | Hành động | ADMIN | PM | DEV |
 |---|---|---|---|
 | Tạo / sửa / xoá project | ✅ | ❌ | ❌ |
-| Thêm PM, Dev vào project | ✅ | ✅ (project mình quản lý) | ❌ |
-| Tạo / sửa task | ✅ | ✅ (project mình quản lý) | ❌ |
-| Giao task cho Dev | ✅ | ✅ | ❌ |
-| Cập nhật tiến độ (%) của task | ✅ | ✅ | ✅ (chỉ task được giao cho mình) |
+| Thêm PM vào project | ✅ | ❌ | ❌ |
+| Thêm Dev vào project | ✅ | ✅ (project mình quản lý) | ❌ |
+| Xoá Dev khỏi project | ✅ | ✅ (project mình quản lý; chặn nếu Dev còn task) | ❌ |
+| Tạo / sửa task | ❌ | ✅ (project mình quản lý) | ❌ |
+| Giao task cho Dev | ❌ | ✅ | ❌ |
+| Cập nhật tiến độ (%) của task | ❌ | ✅ (giám sát) | ✅ (chỉ task được giao cho mình) |
 | Comment (kèm file/ảnh) | ✅ | ✅ | ✅ |
 | Sửa / xoá comment | ✅ (mọi comment) | ✅ (comment của mình) | ✅ (comment của mình) |
 | Xem project / task | Tất cả | Project mình là thành viên | Project mình là thành viên |
 
 ### Ràng buộc nghiệp vụ bắt buộc kiểm tra
 
-1. **PM quản lý tối đa 2 project.** Cách đếm: số bản ghi `ProjectMember` của user có `User.role = PM` (Dev không giới hạn). Khi thêm PM vào project thứ 3 → chặn ở server, trả lỗi rõ ràng ("PM đã quản lý đủ 2 project"). Đây là invariant, phải đếm + chèn trong cùng một transaction chứ không chỉ check ở UI.
-2. **Không có đăng ký.** Chỉ có màn hình đăng nhập. Tài khoản do Admin tạo (hoặc seed script). Tuyệt đối không tạo route `/register`, `/signup`.
-3. **Task luôn thuộc về đúng 1 project** và **được giao cho đúng 1 Dev**: assignee bắt buộc, phải có `User.role = DEV` **và** là thành viên của project đó. Prisma không enforce được điều này — kiểm tra ở Zod schema / Server Action (Admin/PM không được tự gán task cho chính mình).
-4. `startDate <= dueDate`. Cả hai đều bắt buộc.
-5. `progress` là số nguyên `0..100`. `100` ⇒ status tự chuyển `DONE`; `>0 && <100` ⇒ `IN_PROGRESS`.
-6. Người ngoài project **không đọc được** task/comment của project đó — kể cả khi biết id.
+1. **PM có thể quản lý nhiều project, không giới hạn số lượng.** (Rule "tối đa 2 project" từng tồn tại đã được gỡ bỏ theo quyết định 15/07/2026 — không thêm lại giới hạn khi chưa được yêu cầu.)
+2. **Chỉ Admin thêm được PM vào project.** PM không tự thêm PM khác vào project mình quản lý, kể cả project do chính PM đó quản lý — PM chỉ thêm được Dev.
+3. **Xoá thành viên khỏi project: chỉ xoá được Dev, và chặn nếu Dev còn task trong project đó.** Trả lỗi rõ ràng yêu cầu giao lại task cho Dev khác trước — giữ invariant "assignee luôn là thành viên project". Việc gỡ PM khỏi project chưa có trong phạm vi.
+4. **Không có đăng ký.** Chỉ có màn hình đăng nhập. Tài khoản do Admin tạo (hoặc seed script). Tuyệt đối không tạo route `/register`, `/signup`.
+5. **Task luôn thuộc về đúng 1 project** và **được giao cho đúng 1 Dev**: assignee bắt buộc, phải có `User.role = DEV` **và** là thành viên của project đó. Prisma không enforce được điều này — kiểm tra ở Zod schema / Server Action (chỉ PM tạo/sửa/giao task — Admin không tự gán task cho ai).
+6. `startDate <= dueDate`. Cả hai đều bắt buộc — áp dụng cho cả Task **và** Project (Admin bắt buộc nhập ngày bắt đầu/kết thúc khi tạo project).
+7. `progress` là số nguyên `0..100`. `100` ⇒ status tự chuyển `DONE`; `>0 && <100` ⇒ `IN_PROGRESS`.
+8. Người ngoài project **không đọc được** task/comment của project đó — kể cả khi biết id.
 
 ### Nguyên tắc kiểm quyền
 
@@ -70,8 +74,9 @@ await requireTaskAssignee(taskId, user);                  // Dev chỉ sửa tas
 Các quyết định thiết kế cần biết khi đụng vào schema:
 
 - `ProjectMember` **không có cột role** — quyền hạn luôn lấy từ `User.role` toàn cục (xem §2).
-- Ràng buộc Prisma không enforce được, **bắt buộc check ở Zod + Server Action**: assignee là DEV và là thành viên project; `progress` 0..100; `startDate <= dueDate`; Attachment thuộc đúng 1 trong 2 (`taskId` XOR `commentId` — bổ sung CHECK constraint bằng SQL trong migration đầu tiên).
-- `startDate`/`dueDate` lưu `@db.Date` (chỉ ngày, nghiệp vụ tính theo ngày, tránh lệch timezone); mọi timestamp khác là `timestamptz`.
+- `Project` cũng có `startDate`/`dueDate` (giống `Task`) — Admin bắt buộc nhập cả hai khi tạo project.
+- Ràng buộc Prisma không enforce được, **bắt buộc check ở Zod + Server Action**: assignee là DEV và là thành viên project; `progress` 0..100; `startDate <= dueDate` (cả Task lẫn Project); Attachment thuộc đúng 1 trong 2 (`taskId` XOR `commentId` — bổ sung CHECK constraint bằng SQL trong migration đầu tiên).
+- `startDate`/`dueDate` (Task và Project) lưu `@db.Date` (chỉ ngày, nghiệp vụ tính theo ngày, tránh lệch timezone); mọi timestamp khác là `timestamptz`.
 - Xoá project → cascade sang member/task/comment/attachment. **Không** cascade khi xoá User (`onDelete: Restrict` trên task/comment) — user có dữ liệu thì không xoá được.
 
 Upload: chỉ nhận ảnh (`image/png|jpeg|webp|gif`) và tài liệu (`pdf`, `docx`, `xlsx`, `zip`), tối đa **10MB/file**. Tên file gốc chỉ để hiển thị; lưu bằng key ngẫu nhiên. Tải file qua route có kiểm quyền, không serve thẳng thư mục `uploads`.
@@ -179,7 +184,9 @@ Quy trình mỗi lần bắt đầu: `npm run db:up` → đợi healthcheck xanh
 ## 8. Việc KHÔNG được làm
 
 - Tạo luồng đăng ký / self-signup dưới mọi hình thức.
-- Cho PM là thành viên của project thứ 3.
+- Cho PM tự thêm PM khác vào project (kể cả project mình quản lý) — chỉ Admin làm việc này.
+- Xoá Dev khỏi project khi Dev còn task trong project đó (kể cả task DONE).
+- Cho Admin tạo/sửa/giao task hoặc cập nhật tiến độ — task là việc của PM (tạo/sửa/giao, giám sát tiến độ) và Dev (cập nhật tiến độ task của mình).
 - Cho Dev sửa task không phải của mình, hoặc sửa field ngoài `progress` (+ comment).
 - Serve thư mục `uploads` như static, hoặc trả file mà không kiểm quyền.
 - Lưu mật khẩu chưa hash; log ra `passwordHash`, token, hay nội dung `.env`.
@@ -191,7 +198,7 @@ Quy trình mỗi lần bắt đầu: `npm run db:up` → đợi healthcheck xanh
 
 1. Docker Postgres + Prisma schema + seed (admin, 2 PM, 3 Dev).
 2. Auth login-only + guard phân quyền + middleware chặn route.
-3. CRUD Project (Admin) + thêm thành viên (kèm rule "PM tối đa 2 project").
+3. CRUD Project (Admin) + thêm thành viên.
 4. CRUD Task (PM) — ngày bắt đầu/kết thúc, assignee.
 5. Cập nhật tiến độ % (Dev) + đồng bộ status.
 6. Comment + đính kèm file/ảnh (mọi role).

@@ -17,7 +17,7 @@ Phạm vi: các file đã thay đổi trên nhánh hiện tại (`git diff main.
 
 4. **Dev chỉ được sửa `progress` của task giao cho chính mình.** Kiểm tra action cập nhật task: Dev không được đổi `title`, `assigneeId`, `startDate`, `dueDate`, `projectId`. Cách an toàn là Dev đi qua một action riêng chỉ nhận `{ taskId, progress }`.
 
-5. **Invariant "PM tối đa 2 project".** Việc thêm PM vào project phải đếm và chèn trong cùng một transaction (`$transaction` + khoá hàng, hoặc unique constraint), nếu không sẽ có race condition tạo ra PM ở 3 project. Check ở UI hoặc check rồi mới insert ngoài transaction đều là sai.
+5. **Thành viên project.** Chỉ Admin thêm được PM vào project; PM chỉ thêm được Dev vào project mình quản lý. Xoá thành viên: chỉ xoá được Dev, và phải chặn nếu Dev còn task trong project đó (giữ invariant "assignee là thành viên project").
 
 6. **Không có luồng đăng ký.** Không tồn tại route/action nào tạo `User` ngoài seed script và chức năng dành riêng cho Admin.
 
