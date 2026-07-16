@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Task Management
 
-## Getting Started
+Hệ thống quản lý task nội bộ: Admin tạo project, PM tạo task giao cho Dev, Dev cập nhật tiến độ, mọi role đều comment được.
 
-First, run the development server:
+> Quy tắc nghiệp vụ, phân quyền, và quy ước code đầy đủ nằm ở [CLAUDE.md](./CLAUDE.md) — đó mới là nguồn sự thật, file này chỉ hướng dẫn chạy dự án.
+
+## Tech stack
+
+| Thành phần | Lựa chọn |
+|---|---|
+| Framework | Next.js 16 (App Router) + TypeScript strict |
+| UI | Tailwind CSS + shadcn/ui (Base UI) |
+| Database | PostgreSQL 16 chạy bằng Docker |
+| ORM | Prisma 7 |
+| Auth | Auth.js v5, Credentials provider, session JWT |
+| Validation | Zod (dùng chung client + server) |
+| Test | Vitest (unit) + Playwright (e2e) |
+
+## 3 role
+
+| Role | Việc chính |
+|---|---|
+| **Admin** | Tạo project, thêm PM vào project, xem toàn hệ thống |
+| **PM** | Thêm/xoá Dev khỏi project mình quản lý, tạo/sửa/giao task, giám sát tiến độ |
+| **Dev** | Xem task được giao, cập nhật tiến độ task của mình |
+
+Mọi role đều comment và sửa comment của chính mình được. Không có màn hình đăng ký — tài khoản do Admin tạo hoặc từ seed script.
+
+## Bắt đầu
+
+> Hướng dẫn chi tiết từng bước + xử lý lỗi thường gặp: xem [SETUP.md](./SETUP.md).
+
+**Yêu cầu:** Node.js 20 LTS, Docker Desktop.
 
 ```bash
+npm install
+
+cp .env.example .env
+# điền DATABASE_URL, AUTH_SECRET, SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD
+
+npm run db:up        # khởi động Postgres, đợi healthcheck xanh
+npm run db:migrate   # tạo schema
+npm run db:seed      # tạo tài khoản admin + PM/Dev mẫu + project/task demo
+
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Mở [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Tài khoản sau khi seed
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Role | Email | Mật khẩu |
+|---|---|---|
+| Admin | theo `SEED_ADMIN_EMAIL` trong `.env` | theo `SEED_ADMIN_PASSWORD` trong `.env` |
+| PM / Dev mẫu | xem `prisma/seed.ts` | `Matkhau@123` |
 
-## Learn More
+## Lệnh thường dùng
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run dev            # dev server
+npm run build          # build production
+npm run lint
+npm run typecheck       # tsc --noEmit
+npm test                # vitest
+npm run test:e2e        # playwright
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+npm run db:up           # docker compose up -d
+npm run db:down         # docker compose down
+npm run db:migrate      # prisma migrate dev
+npm run db:seed         # seed lại dữ liệu mẫu
+npm run db:studio       # prisma studio (xem/sửa data trực tiếp)
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Trước khi coi một thay đổi là xong: chạy `npm run typecheck` + `npm run lint` + test liên quan.
 
-## Deploy on Vercel
+## Cấu trúc thư mục (rút gọn)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/app/(auth)/login/     # đăng nhập — không có đăng ký
+src/app/(app)/             # màn hình sau đăng nhập (theo role)
+src/lib/actions/           # Server Actions
+src/lib/validation/        # Zod schema dùng chung client + server
+src/lib/auth/guard.ts      # hàm kiểm quyền — mọi action đều bắt đầu từ đây
+prisma/schema.prisma       # nguồn sự thật duy nhất về data model
+prisma/seed.ts             # tạo admin + PM/Dev + project/task mẫu
+docker-compose.yml         # Postgres cho dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Chi tiết đầy đủ về nghiệp vụ, ma trận phân quyền, và quy ước code: xem [CLAUDE.md](./CLAUDE.md).

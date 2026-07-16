@@ -85,22 +85,29 @@ Upload: chỉ nhận ảnh (`image/png|jpeg|webp|gif`) và tài liệu (`pdf`, `
 
 ## 4. Cấu trúc thư mục
 
+Code chính nằm trong `src/` (quy ước `src` của Next.js) — tách khỏi file cấu hình ở root. `public/`, `prisma/`, và mọi file cấu hình (`package.json`, `next.config.ts`, `tsconfig.json`, `docker-compose.yml`, ...) **luôn ở root**, không chuyển vào `src/`.
+
 ```
-app/
-  (auth)/login/            # chỉ có login, không có register
-  (app)/
-    projects/              # ADMIN: tạo/quản lý; PM/DEV: chỉ project của mình
-    projects/[id]/tasks/
-    tasks/[id]/            # chi tiết task + tiến độ + comment
-    my-tasks/              # màn hình chính của DEV
-    dashboard/             # màn hình PM xem hàng ngày: task theo trạng thái, quá hạn, tiến độ
-  api/files/[id]/          # download có kiểm quyền
-  api/upload/              # nhận file
-lib/
-  auth/                    # authOptions, guard.ts
-  actions/                 # Server Actions: project.ts, task.ts, comment.ts
-  validation/              # Zod schemas dùng chung client + server
-  db.ts                    # Prisma singleton
+src/
+  app/
+    (auth)/login/            # chỉ có login, không có register
+    (app)/
+      projects/              # ADMIN: tạo/quản lý; PM/DEV: chỉ project của mình
+      projects/[id]/tasks/
+      tasks/[id]/            # chi tiết task + tiến độ + comment
+      my-tasks/              # màn hình chính của DEV
+      dashboard/             # màn hình PM xem hàng ngày: task theo trạng thái, quá hạn, tiến độ
+    api/files/[id]/          # download có kiểm quyền
+    api/upload/              # nhận file
+  lib/
+    auth/                    # authOptions, guard.ts
+    actions/                 # Server Actions: project.ts, task.ts, comment.ts
+    validation/              # Zod schemas dùng chung client + server
+    db.ts                    # Prisma singleton
+  components/                # UI components (shadcn/ui + component riêng của app)
+  hooks/
+  types/
+  proxy.ts                   # request proxy (Next.js 16) — bắt buộc đặt trong src/ khi dùng src directory
 prisma/
   schema.prisma
   seed.ts                  # tạo sẵn admin + vài PM/Dev (vì không có đăng ký)
@@ -120,6 +127,7 @@ docker-compose.yml
 - **Mọi màn hình danh sách phải đủ 3 trạng thái**: loading (`loading.tsx` với skeleton đúng hình dạng nội dung), error (`error.tsx`), và empty state có hướng dẫn hành động tiếp theo.
 - Component đặt tên tiếng Anh; text hiển thị cho người dùng bằng **tiếng Việt**.
 - Không commit `.env`. Mẫu biến môi trường để ở `.env.example`.
+- **Base UI `Select` (`components/ui/select.tsx`) luôn phải truyền prop `items` (map `value -> label`) vào `Select.Root`.** Thiếu prop này, `Select.Value` hiển thị raw `value` (vd. cuid) thay vì label, dù value được set qua `defaultValues` hay qua thao tác chọn thật của người dùng — đây là gotcha đã xảy ra ở cả 4 form dùng Select (`TaskDialog`, `AddPmDialog`, `AddDevDialog`, `CreateProjectDialog`).
 
 ---
 
@@ -137,6 +145,7 @@ npm run db:up          # docker compose up -d  (khởi động Postgres)
 npm run db:down        # docker compose down
 npm run db:migrate     # prisma migrate dev
 npm run db:seed        # tạo admin + user mẫu
+npm run db:seed:demo   # thêm dữ liệu demo mở rộng (3 PM, 7 Dev, 4 project) — không đụng seed.ts
 npm run db:studio      # prisma studio
 ```
 
