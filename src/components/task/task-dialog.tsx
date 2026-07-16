@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus } from "lucide-react";
+import { CircleAlert, Plus } from "lucide-react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createTask, updateTask } from "@/lib/actions/task";
+import { DEV_OVERLOAD_TASK_THRESHOLD } from "@/lib/constants";
 
 type DevOption = { id: string; name: string };
 
@@ -69,6 +70,7 @@ export function TaskDialog({
   projectId,
   taskId,
   devOptions,
+  devWorkload,
   initialValues,
   trigger,
 }: {
@@ -76,6 +78,9 @@ export function TaskDialog({
   projectId?: string;
   taskId?: string;
   devOptions: DevOption[];
+  // Số task chưa DONE của mỗi Dev trong project này — dùng để cảnh báo mềm,
+  // không chặn PM giao task.
+  devWorkload?: Record<string, number>;
   initialValues?: FormValues;
   trigger?: React.ReactElement;
 }) {
@@ -97,6 +102,11 @@ export function TaskDialog({
   });
 
   const assigneeId = useWatch({ control, name: "assigneeId" });
+
+  // Base UI Select.Value chỉ tự hiển thị label khi Select.Root có prop `items`
+  // (value -> label) — thiếu prop này thì trigger hiện raw id dù chọn qua UI.
+  const selectItems = Object.fromEntries(devOptions.map((dev) => [dev.id, dev.name]));
+  const currentWorkload = assigneeId ? (devWorkload?.[assigneeId] ?? 0) : 0;
 
   async function onSubmit(values: FormValues) {
     setRootError(null);
@@ -182,6 +192,7 @@ export function TaskDialog({
           <div className="grid gap-2">
             <Label htmlFor="task-assignee">Dev thực hiện</Label>
             <Select
+              items={selectItems}
               value={assigneeId || null}
               onValueChange={(value) =>
                 setValue("assigneeId", value ?? "", { shouldValidate: true })
@@ -206,6 +217,13 @@ export function TaskDialog({
             {errors.assigneeId && (
               <p className="text-sm text-destructive">
                 {errors.assigneeId.message}
+              </p>
+            )}
+            {!errors.assigneeId && currentWorkload >= DEV_OVERLOAD_TASK_THRESHOLD && (
+              <p className="flex items-center gap-1.5 text-xs text-[oklch(0.5_0.15_85)] dark:text-[oklch(0.75_0.15_85)]">
+                <CircleAlert className="size-3.5 shrink-0" aria-hidden />
+                Dev này đang có {currentWorkload} task chưa hoàn thành trong
+                project này — vẫn giao được nếu cần.
               </p>
             )}
           </div>

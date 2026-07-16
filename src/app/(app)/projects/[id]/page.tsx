@@ -116,6 +116,16 @@ export default async function ProjectDetailPage({
     name: m.user.name,
   }));
 
+  // Số task chưa DONE của mỗi Dev, chỉ trong project này — nguồn cho cảnh báo
+  // mềm khi PM chọn assignee trong TaskDialog (không chặn, chỉ để cân nhắc).
+  const devWorkload = Object.fromEntries(
+    devMembers.map((m) => [
+      m.userId,
+      project.tasks.filter((t) => t.assigneeId === m.userId && t.status !== "DONE")
+        .length,
+    ]),
+  );
+
   return (
     <div className="grid gap-8">
       <div className="grid gap-3">
@@ -216,6 +226,7 @@ export default async function ProjectDetailPage({
                 mode="create"
                 projectId={project.id}
                 devOptions={assigneeOptions}
+                devWorkload={devWorkload}
               />
             ) : (
               <div className="flex items-center gap-2">
@@ -281,6 +292,7 @@ export default async function ProjectDetailPage({
                           mode="edit"
                           taskId={task.id}
                           devOptions={assigneeOptions}
+                          devWorkload={devWorkload}
                           initialValues={{
                             title: task.title,
                             description: task.description,
