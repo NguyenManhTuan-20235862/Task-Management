@@ -1,0 +1,11 @@
+{
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "package.json": "package-lock.json, tsconfig.json, tsconfig.tsbuildinfo, next.config.*, next-env.d.ts, postcss.config.*, eslint.config.*, .prettierrc, .prettierrc.*, components.json, playwright.config.*, vitest.config.*, vitest.setup.*, prisma.config.*, .gitignore, skills-lock.json",
+    ".env": ".env.*"
+  },
+  "files.exclude": {
+    "**/.next": true
+  }
+}
