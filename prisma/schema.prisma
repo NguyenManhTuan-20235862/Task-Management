@@ -26,6 +26,13 @@ enum TaskStatus {
   DONE
 }
 
+enum ActivityType {
+  CREATE
+  UPDATE
+  COMMENT
+  DELETE
+}
+
 model User {
   id              String          @id @default(cuid())
   email           String          @unique
@@ -36,22 +43,24 @@ model User {
   createdProjects Project[]       @relation("projectCreator")
   assignedTasks   Task[]          @relation("assignee")
   comments        Comment[]
+  activityLogs    ActivityLog[]
   createdAt       DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime        @updatedAt @db.Timestamptz(3)
 }
 
 model Project {
-  id        String          @id @default(cuid())
-  name      String
+  id           String          @id @default(cuid())
+  name         String
   // Chỉ lưu ngày (không giờ), cùng quy ước với Task — tránh lệch timezone.
-  startDate DateTime        @db.Date
-  dueDate   DateTime        @db.Date
-  creator   User            @relation("projectCreator", fields: [createdBy], references: [id])
-  createdBy String // luôn là ADMIN
-  members   ProjectMember[]
-  tasks     Task[]
-  createdAt DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime        @updatedAt @db.Timestamptz(3)
+  startDate    DateTime        @db.Date
+  dueDate      DateTime        @db.Date
+  creator      User            @relation("projectCreator", fields: [createdBy], references: [id])
+  createdBy    String // luôn là ADMIN
+  members      ProjectMember[]
+  tasks        Task[]
+  activityLogs ActivityLog[]
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime        @updatedAt @db.Timestamptz(3)
 }
 
 // Bảng nối: quyết định ai thấy project nào. Quyền hạn lấy từ User.role toàn cục.
@@ -117,4 +126,24 @@ model Attachment {
 
   @@index([taskId])
   @@index([commentId])
+}
+
+// Audit log các thao tác quan trọng (tạo/sửa task, đổi tiến độ, thêm/xoá
+// thành viên project...) — nội dung hiển thị lưu dạng câu văn dựng sẵn
+// (denormalized) nên vẫn đọc được nguyên vẹn kể cả sau khi project bị xoá.
+// projectId chỉ dùng để LỌC hoạt động theo project (vd. "Hoạt động gần đây"
+// trên trang chi tiết project) — SetNull khi project bị xoá, không mất log.
+model ActivityLog {
+  id        String       @id @default(cuid())
+  actor     User         @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  actorId   String
+  project   Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectId String?
+  type      ActivityType
+  message   String       @db.Text
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([actorId])
+  @@index([projectId])
+  @@index([createdAt])
 }

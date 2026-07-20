@@ -3,10 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { hash } from "bcryptjs";
 
+import { logActivity } from "@/lib/actions/activity-log";
 import { safeAction } from "@/lib/actions/safe-action";
 import { ForbiddenError, requireRole, requireUser } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
 import { createMemberSchema } from "@/lib/validation/member";
+
+const roleLabels = { ADMIN: "Admin", PM: "PM", DEV: "Dev" } as const;
 
 // Chỉ Admin tạo tài khoản (CLAUDE.md: không có đăng ký, tài khoản do Admin tạo).
 export async function createMember(input: unknown) {
@@ -29,6 +32,13 @@ export async function createMember(input: unknown) {
         passwordHash: await hash(parsed.password, 12),
       },
     });
+
+    await logActivity(
+      db,
+      user.id,
+      "CREATE",
+      `đã tạo tài khoản ${roleLabels[parsed.role]} "${parsed.name}"`,
+    );
 
     revalidatePath("/members");
     revalidatePath("/");

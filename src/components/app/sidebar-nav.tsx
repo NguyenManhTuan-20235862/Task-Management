@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@prisma/client";
-import { FolderKanban, LayoutGrid, ListChecks, Settings, Users } from "lucide-react";
+import {
+  Activity,
+  FolderKanban,
+  LayoutGrid,
+  ListChecks,
+  Settings,
+  Users,
+} from "lucide-react";
 
 import {
   SidebarMenu,
@@ -24,6 +31,7 @@ export function SidebarNav({ role }: { role: Role }) {
           { href: "/", label: "Tổng quan", icon: LayoutGrid },
           { href: "/projects", label: "Dự án", icon: FolderKanban },
           { href: "/members", label: "Thành viên", icon: Users },
+          { href: "/activity", label: "Hoạt động", icon: Activity },
         ]
       : role === "PM"
         ? [

@@ -13,8 +13,9 @@ import {
 
 import { CreateProjectDialog } from "@/components/project/create-project-dialog";
 import { ProjectCard } from "@/components/project/project-card";
+import { ProjectStatusBadge } from "@/components/project/project-status-badge";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { StatusBadge } from "@/components/task/status-badge";
+import { MyTasksTable, type MyTask } from "@/components/task/my-tasks-table";
 import { TaskProgress } from "@/components/task/task-progress";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user/user-avatar";
@@ -23,7 +24,13 @@ import { DEV_OVERLOAD_TASK_THRESHOLD } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { summarizeProject } from "@/lib/queries/project-summary";
 
-export default async function HomePage() {
+const PM_PAGE_SIZE = 3;
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const { user } = await requireUser();
 
   if (user.role === "DEV") {
@@ -34,7 +41,7 @@ export default async function HomePage() {
     return <PmDashboard userId={user.id} />;
   }
 
-  return <AdminOverview />;
+  return <AdminOverview searchParams={searchParams} />;
 }
 
 // Màn hình PM xem hàng ngày (CLAUDE.md §4): task theo trạng thái, quá hạn,
@@ -291,7 +298,7 @@ async function PmDashboard({ userId }: { userId: string }) {
 async function DevDashboard({ userId }: { userId: string }) {
   const todayUtc = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
 
-  const tasks = await db.task.findMany({
+  const tasksRaw = await db.task.findMany({
     where: { assigneeId: userId },
     select: {
       id: true,
@@ -304,26 +311,37 @@ async function DevDashboard({ userId }: { userId: string }) {
     orderBy: { dueDate: "asc" },
   });
 
-  const overdueCount = tasks.filter(
+  const overdueCount = tasksRaw.filter(
     (t) => t.status !== "DONE" && t.dueDate < todayUtc,
   ).length;
-  const inProgressCount = tasks.filter((t) => t.status === "IN_PROGRESS").length;
-  const doneCount = tasks.filter((t) => t.status === "DONE").length;
-  const avgProgress =
-    tasks.length > 0
-      ? Math.round(tasks.reduce((sum, t) => sum + t.progress, 0) / tasks.length)
-      : 0;
+  const inProgressCount = tasksRaw.filter((t) => t.status === "IN_PROGRESS").length;
+  const doneCount = tasksRaw.filter((t) => t.status === "DONE").length;
 
-  const today = format(new Date(), "EEEE, d 'tháng' M, yyyy", { locale: vi });
+  const tasks: MyTask[] = tasksRaw.map((task) => ({
+    id: task.id,
+    title: task.title,
+    projectName: task.project.name,
+    status: task.status,
+    progress: task.progress,
+    dueDateLabel: format(task.dueDate, "dd/MM/yyyy"),
+    isOverdue: task.status !== "DONE" && task.dueDate < todayUtc,
+  }));
 
   return (
     <div className="grid gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Việc của tôi</h1>
-        <p className="text-sm text-muted-foreground capitalize">{today}</p>
+        <p className="text-sm text-muted-foreground">Các task được giao cho bạn</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard
+          icon={Loader}
+          value={String(inProgressCount)}
+          label="Đang thực hiện"
+          sublabel={`Trên ${tasksRaw.length} task được giao`}
+          tone="primary"
+        />
         <StatCard
           icon={CircleAlert}
           value={String(overdueCount)}
@@ -332,97 +350,27 @@ async function DevDashboard({ userId }: { userId: string }) {
           tone="amber"
         />
         <StatCard
-          icon={Loader}
-          value={String(inProgressCount)}
-          label="Đang làm"
-          sublabel={`Trên ${tasks.length} task được giao`}
-          tone="primary"
-        />
-        <StatCard
           icon={CheckSquare}
           value={String(doneCount)}
           label="Hoàn thành"
-          sublabel={`Trên tổng ${tasks.length} task`}
+          sublabel={`Trên tổng ${tasksRaw.length} task`}
           tone="emerald"
         />
-        <StatCard
-          icon={TrendingUp}
-          value={`${avgProgress}%`}
-          label="Tiến độ TB"
-          sublabel="Toàn bộ task của tôi"
-          tone="neutral"
-        />
       </div>
 
-      <div className="rounded-xl border border-border">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-sm font-medium">
-            Task được giao{tasks.length > 0 && ` (${tasks.length})`}
-          </h2>
-        </div>
-
-        {tasks.length === 0 ? (
-          <div className="grid justify-items-center gap-3 px-4 py-16 text-center">
-            <CheckSquare className="size-8 text-muted-foreground" aria-hidden />
-            <p className="text-sm text-muted-foreground">
-              Bạn chưa được giao task nào. PM sẽ giao task khi bạn được thêm
-              vào project.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="px-4 py-2.5 font-medium">Task</th>
-                  <th className="px-4 py-2.5 font-medium">Dự án</th>
-                  <th className="px-4 py-2.5 font-medium">Tiến độ</th>
-                  <th className="px-4 py-2.5 font-medium">Hạn chót</th>
-                  <th className="px-4 py-2.5 font-medium">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {tasks.map((task) => {
-                  const isOverdue = task.status !== "DONE" && task.dueDate < todayUtc;
-                  return (
-                    <tr key={task.id} className="hover:bg-muted/40">
-                      <td className="px-4 py-3 font-medium">
-                        <Link
-                          href={`/tasks/${task.id}`}
-                          className="hover:underline underline-offset-4"
-                        >
-                          {task.title}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {task.project.name}
-                      </td>
-                      <td className="px-4 py-3">
-                        <TaskProgress value={task.progress} className="w-32" />
-                      </td>
-                      <td
-                        className={`px-4 py-3 tabular-nums ${
-                          isOverdue ? "text-destructive" : "text-muted-foreground"
-                        }`}
-                      >
-                        {format(task.dueDate, "dd/MM/yyyy")}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={task.status} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <MyTasksTable tasks={tasks} />
     </div>
   );
 }
 
-async function AdminOverview() {
+async function AdminOverview({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const rawPmPage = Array.isArray(params.pmPage) ? params.pmPage[0] : params.pmPage;
+
   const [
     totalProjects,
     totalTasks,
@@ -430,8 +378,7 @@ async function AdminOverview() {
     totalMembers,
     progressAgg,
     recentProjectsRaw,
-    recentMembers,
-    pmOptions,
+    pmAll,
   ] = await Promise.all([
     db.project.count(),
     db.task.count(),
@@ -451,26 +398,34 @@ async function AdminOverview() {
       },
     }),
     db.user.findMany({
-      where: { role: { not: "ADMIN" } },
-      orderBy: { createdAt: "asc" },
-      take: 3,
-      select: { id: true, name: true, email: true, role: true },
-    }),
-    db.user.findMany({
       where: { role: "PM" },
-      select: { id: true, name: true, _count: { select: { memberships: true } } },
       orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        _count: { select: { memberships: true } },
+      },
     }),
   ]);
 
   const avgProgress = Math.round(progressAgg._avg.progress ?? 0);
   const recentProjects = recentProjectsRaw.map(summarizeProject);
 
-  const pmOptionsFormatted = pmOptions.map((pm) => ({
+  const pmOptionsFormatted = pmAll.map((pm) => ({
     id: pm.id,
     name: pm.name,
     projectCount: pm._count.memberships,
   }));
+
+  // Danh sách PM đủ nhỏ (nội bộ) nên lấy hết 1 lần rồi phân trang bằng slice —
+  // tránh 1 query DB riêng chỉ để đếm total, và đảm bảo total luôn khớp pmOptions.
+  const pmTotalPages = Math.max(1, Math.ceil(pmAll.length / PM_PAGE_SIZE));
+  const pmPage = Math.min(Math.max(1, Number(rawPmPage) || 1), pmTotalPages);
+  const pmPageMembers = pmAll.slice(
+    (pmPage - 1) * PM_PAGE_SIZE,
+    pmPage * PM_PAGE_SIZE,
+  );
 
   const today = format(new Date(), "EEEE, d 'tháng' M, yyyy", { locale: vi });
 
@@ -578,7 +533,7 @@ async function AdminOverview() {
                         : "-"}
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={project.status} />
+                      <ProjectStatusBadge status={project.status} />
                     </td>
                   </tr>
                 ))}
@@ -588,25 +543,62 @@ async function AdminOverview() {
         )}
       </div>
 
-      {recentMembers.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {recentMembers.map((member) => (
-            <div
-              key={member.id}
-              className="flex items-center gap-3 rounded-xl border border-border px-4 py-3"
-            >
-              <UserAvatar name={member.name} />
-              <div className="grid min-w-0 flex-1 gap-0">
-                <p className="truncate text-sm font-medium">{member.name}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {member.email}
-                </p>
-              </div>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {member.role}
+      {pmAll.length > 0 && (
+        <div className="rounded-xl border border-border">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <h2 className="text-sm font-medium">PM ({pmAll.length})</h2>
+            {pmTotalPages > 1 && (
+              <span className="text-xs text-muted-foreground">
+                Trang {pmPage}/{pmTotalPages}
               </span>
+            )}
+          </div>
+
+          <div className="grid gap-3 p-4 sm:grid-cols-3">
+            {pmPageMembers.map((pm) => (
+              <div
+                key={pm.id}
+                className="flex items-center gap-3 rounded-xl border border-border px-4 py-3"
+              >
+                <UserAvatar name={pm.name} />
+                <div className="grid min-w-0 flex-1 gap-0">
+                  <p className="truncate text-sm font-medium">{pm.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {pm.email}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {pmTotalPages > 1 && (
+            <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3">
+              {pmPage > 1 ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link href={`/?pmPage=${pmPage - 1}`} />}
+                >
+                  Trước
+                </Button>
+              ) : (
+                <span />
+              )}
+              {pmPage < pmTotalPages ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link href={`/?pmPage=${pmPage + 1}`} />}
+                >
+                  Sau
+                </Button>
+              ) : (
+                <span />
+              )}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

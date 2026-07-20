@@ -2,7 +2,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { CalendarDays } from "lucide-react";
 
-import { StatusBadge } from "@/components/task/status-badge";
+import { ProjectStatusBadge } from "@/components/project/project-status-badge";
 import { TaskProgress } from "@/components/task/task-progress";
 import { UserAvatar } from "@/components/user/user-avatar";
 import type { ProjectSummary } from "@/lib/queries/project-summary";
@@ -83,7 +83,7 @@ export function ProjectCard({
         {project.latestDue && (
           <span>{format(project.latestDue, "dd/MM/yyyy")}</span>
         )}
-        <StatusBadge status={project.status} />
+        <ProjectStatusBadge status={project.status} />
       </div>
     </Link>
   );

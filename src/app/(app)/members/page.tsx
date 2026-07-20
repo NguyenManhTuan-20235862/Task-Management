@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { BarChart3, CheckSquare, Shield } from "lucide-react";
@@ -93,17 +94,34 @@ export default async function MembersPage() {
           </thead>
           <tbody className="divide-y divide-border">
             {members.map((member) => (
-              <tr key={member.id}>
+              <tr key={member.id} className={member.role !== "ADMIN" ? "hover:bg-muted/40" : undefined}>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <UserAvatar name={member.name} size="sm" />
-                    <div className="grid gap-0">
-                      <span className="font-medium">{member.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {roleDescriptions[member.role]}
-                      </span>
+                  {member.role === "ADMIN" ? (
+                    <div className="flex items-center gap-2.5">
+                      <UserAvatar name={member.name} size="sm" />
+                      <div className="grid gap-0">
+                        <span className="font-medium">{member.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {roleDescriptions[member.role]}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <Link
+                      href={`/members/${member.id}`}
+                      className="flex items-center gap-2.5"
+                    >
+                      <UserAvatar name={member.name} size="sm" />
+                      <div className="grid gap-0">
+                        <span className="font-medium hover:underline underline-offset-4">
+                          {member.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {roleDescriptions[member.role]}
+                        </span>
+                      </div>
+                    </Link>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{member.email}</td>
                 <td className="px-4 py-3">

@@ -78,6 +78,7 @@ Các quyết định thiết kế cần biết khi đụng vào schema:
 - Ràng buộc Prisma không enforce được, **bắt buộc check ở Zod + Server Action**: assignee là DEV và là thành viên project; `progress` 0..100; `startDate <= dueDate` (cả Task lẫn Project); Attachment thuộc đúng 1 trong 2 (`taskId` XOR `commentId` — bổ sung CHECK constraint bằng SQL trong migration đầu tiên).
 - `startDate`/`dueDate` (Task và Project) lưu `@db.Date` (chỉ ngày, nghiệp vụ tính theo ngày, tránh lệch timezone); mọi timestamp khác là `timestamptz`.
 - Xoá project → cascade sang member/task/comment/attachment. **Không** cascade khi xoá User (`onDelete: Restrict` trên task/comment) — user có dữ liệu thì không xoá được.
+- `ActivityLog` ghi audit log dạng câu văn dựng sẵn (`message`, denormalized) để đọc được nguyên vẹn kể cả khi resource liên quan đã bị xoá; `projectId` chỉ là optional/`SetNull` dùng để **lọc** hoạt động theo project (mục "Hoạt động gần đây"), không phải nguồn hiển thị.
 
 Upload: chỉ nhận ảnh (`image/png|jpeg|webp|gif`) và tài liệu (`pdf`, `docx`, `xlsx`, `zip`), tối đa **10MB/file**. Tên file gốc chỉ để hiển thị; lưu bằng key ngẫu nhiên. Tải file qua route có kiểm quyền, không serve thẳng thư mục `uploads`.
 
@@ -92,17 +93,19 @@ src/
   app/
     (auth)/login/            # chỉ có login, không có register
     (app)/
-      projects/              # ADMIN: tạo/quản lý; PM/DEV: chỉ project của mình
-      projects/[id]/tasks/
-      tasks/[id]/            # chi tiết task + tiến độ + comment
-      my-tasks/              # màn hình chính của DEV
-      dashboard/             # màn hình PM xem hàng ngày: task theo trạng thái, quá hạn, tiến độ
-    api/files/[id]/          # download có kiểm quyền
-    api/upload/              # nhận file
+      page.tsx               # trang chủ theo role: Admin=tổng quan hệ thống, PM=dashboard project mình quản lý, Dev=việc của tôi
+      projects/              # ADMIN: tạo/quản lý toàn bộ; PM/DEV: chỉ project mình là thành viên
+      projects/[id]/         # chi tiết project — tab Thành viên/Task + "Hoạt động gần đây" (lọc theo project)
+      tasks/[id]/             # chi tiết task + tiến độ + comment
+      members/                # ADMIN: quản lý thành viên hệ thống
+      members/[id]/           # ADMIN: chi tiết 1 thành viên — project tham gia (+ task được giao nếu là Dev)
+      activity/                # ADMIN: nhật ký 30 hoạt động gần nhất toàn hệ thống
+    api/auth/[...nextauth]/  # Auth.js route handler
   lib/
     auth/                    # authOptions, guard.ts
-    actions/                 # Server Actions: project.ts, task.ts, comment.ts
+    actions/                 # Server Actions: project.ts, task.ts, member.ts, activity-log.ts (helper logActivity dùng chung)
     validation/              # Zod schemas dùng chung client + server
+    constants/                # token màu/nhãn dùng chung: task-status, project-status, activity-type
     db.ts                    # Prisma singleton
   components/                # UI components (shadcn/ui + component riêng của app)
   hooks/
@@ -111,8 +114,11 @@ src/
 prisma/
   schema.prisma
   seed.ts                  # tạo sẵn admin + vài PM/Dev (vì không có đăng ký)
+  seed-demo.ts             # thêm dữ liệu demo mở rộng — không đụng seed.ts
 docker-compose.yml
 ```
+
+Route upload/download file (`api/files/[id]`, `api/upload`) chưa triển khai — xem §9 mục 6.
 
 ---
 
@@ -128,6 +134,7 @@ docker-compose.yml
 - Component đặt tên tiếng Anh; text hiển thị cho người dùng bằng **tiếng Việt**.
 - Không commit `.env`. Mẫu biến môi trường để ở `.env.example`.
 - **Base UI `Select` (`components/ui/select.tsx`) luôn phải truyền prop `items` (map `value -> label`) vào `Select.Root`.** Thiếu prop này, `Select.Value` hiển thị raw `value` (vd. cuid) thay vì label, dù value được set qua `defaultValues` hay qua thao tác chọn thật của người dùng — đây là gotcha đã xảy ra ở cả 4 form dùng Select (`TaskDialog`, `AddPmDialog`, `AddDevDialog`, `CreateProjectDialog`).
+- **`StatusBadge` (task) và `ProjectStatusBadge` (project) không dùng lẫn nhau** dù cùng nhận chung kiểu `TaskStatus` (project suy ra trạng thái từ tổng hợp task, xem `summarizeProject`). Nhãn hiển thị khác nhau có chủ đích — "Đang làm"/"Chưa bắt đầu" cho Task, "Đang triển khai"/"Chưa triển khai" cho Project — dùng sai component sẽ làm 2 nơi hiển thị cùng 1 trạng thái nhưng lệch chữ.
 
 ---
 
@@ -212,4 +219,4 @@ Quy trình mỗi lần bắt đầu: `npm run db:up` → đợi healthcheck xanh
 5. Cập nhật tiến độ % (Dev) + đồng bộ status.
 6. Comment + đính kèm file/ảnh (mọi role).
 7. Dashboard PM xem hàng ngày (task quá hạn, tiến độ trung bình theo project).
-8. Audit log: bảng `ActivityLog` ghi từ trong action các thao tác quan trọng (tạo/sửa task, đổi tiến độ, xoá comment) — nuôi luôn mục "hoạt động gần đây" trên dashboard.
+8. Audit log: bảng `ActivityLog` ghi từ trong action các thao tác quan trọng (tạo project, thêm/xoá thành viên project, tạo/sửa task, đổi tiến độ, bình luận, tạo tài khoản) qua helper `logActivity()` (`lib/actions/activity-log.ts`) — nuôi mục "Hoạt động gần đây": dạng hộp cuộn tối đa 10 mục (hiện ~3 dòng) lọc theo `projectId` ở trang chi tiết project, và trang `/activity` riêng cho Admin liệt kê 30 hoạt động gần nhất toàn hệ thống.

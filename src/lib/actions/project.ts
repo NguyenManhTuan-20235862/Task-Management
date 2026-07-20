@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 
+import { logActivity } from "@/lib/actions/activity-log";
 import { safeAction } from "@/lib/actions/safe-action";
 import {
   ForbiddenError,
@@ -73,6 +74,14 @@ export async function createProject(input: unknown) {
       await tx.projectMember.create({
         data: { projectId: project.id, userId: parsed.pmUserId },
       });
+
+      await logActivity(
+        tx,
+        user.id,
+        "CREATE",
+        `đã tạo dự án "${project.name}"`,
+        project.id,
+      );
     });
 
     revalidatePath("/projects");
@@ -89,13 +98,13 @@ export async function addProjectMember(input: unknown) {
 
     const project = await db.project.findUnique({
       where: { id: parsed.projectId },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (!project) throw new ForbiddenError("Project không tồn tại");
 
     const pm = await db.user.findUnique({
       where: { id: parsed.pmUserId },
-      select: { role: true },
+      select: { role: true, name: true },
     });
     if (!pm || pm.role !== "PM") {
       throw new ForbiddenError("Người được chọn không phải PM");
@@ -115,6 +124,14 @@ export async function addProjectMember(input: unknown) {
       "PM này đã ở trong project",
     );
 
+    await logActivity(
+      db,
+      user.id,
+      "CREATE",
+      `đã thêm ${pm.name} làm PM cho dự án "${project.name}"`,
+      project.id,
+    );
+
     revalidatePath(`/projects/${parsed.projectId}`);
     revalidatePath("/projects");
   });
@@ -127,9 +144,15 @@ export async function addDevToProject(input: unknown) {
     const { user } = await requireUser();
     await requireProjectRole(parsed.projectId, user, ["ADMIN", "PM"]);
 
+    const project = await db.project.findUnique({
+      where: { id: parsed.projectId },
+      select: { name: true },
+    });
+    if (!project) throw new ForbiddenError("Project không tồn tại");
+
     const dev = await db.user.findUnique({
       where: { id: parsed.devUserId },
-      select: { role: true },
+      select: { role: true, name: true },
     });
     if (!dev || dev.role !== "DEV") {
       throw new ForbiddenError("Người được chọn không phải Dev");
@@ -147,6 +170,14 @@ export async function addDevToProject(input: unknown) {
       parsed.projectId,
       parsed.devUserId,
       "Dev này đã ở trong project",
+    );
+
+    await logActivity(
+      db,
+      user.id,
+      "CREATE",
+      `đã thêm ${dev.name} làm Dev cho dự án "${project.name}"`,
+      parsed.projectId,
     );
 
     revalidatePath(`/projects/${parsed.projectId}`);
@@ -196,6 +227,18 @@ export async function removeProjectMember(input: unknown) {
           projectId_userId: { projectId: parsed.projectId, userId: parsed.memberUserId },
         },
       });
+
+      const project = await tx.project.findUnique({
+        where: { id: parsed.projectId },
+        select: { name: true },
+      });
+      await logActivity(
+        tx,
+        user.id,
+        "DELETE",
+        `đã xoá Dev "${member.name}" khỏi dự án "${project?.name}"`,
+        parsed.projectId,
+      );
     });
 
     revalidatePath(`/projects/${parsed.projectId}`);

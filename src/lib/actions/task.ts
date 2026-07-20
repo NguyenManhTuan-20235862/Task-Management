@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { TaskStatus } from "@prisma/client";
 
+import { logActivity } from "@/lib/actions/activity-log";
 import { safeAction } from "@/lib/actions/safe-action";
 import { ForbiddenError, requireProjectRole, requireUser } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
@@ -72,6 +73,14 @@ export async function createTask(input: unknown) {
           dueDate: toDateOnly(parsed.dueDate),
         },
       });
+
+      await logActivity(
+        tx,
+        user.id,
+        "CREATE",
+        `đã tạo task "${parsed.title}"`,
+        parsed.projectId,
+      );
     });
 
     revalidatePath(`/projects/${parsed.projectId}`);
@@ -106,6 +115,14 @@ export async function updateTask(input: unknown) {
           dueDate: toDateOnly(parsed.dueDate),
         },
       });
+
+      await logActivity(
+        tx,
+        user.id,
+        "UPDATE",
+        `đã cập nhật task "${parsed.title}"`,
+        task.projectId,
+      );
     });
 
     revalidatePath(`/projects/${task.projectId}`);
@@ -122,7 +139,7 @@ export async function updateProgress(input: unknown) {
 
     const task = await db.task.findUnique({
       where: { id: parsed.taskId },
-      select: { assigneeId: true, projectId: true },
+      select: { assigneeId: true, projectId: true, title: true },
     });
     if (!task) throw new ForbiddenError("Task không tồn tại");
 
@@ -142,6 +159,16 @@ export async function updateProgress(input: unknown) {
       data: { progress: parsed.progress, status: statusFromProgress(parsed.progress) },
     });
 
+    await logActivity(
+      db,
+      user.id,
+      "UPDATE",
+      parsed.progress === 100
+        ? `đã hoàn thành task "${task.title}"`
+        : `đã cập nhật tiến độ task "${task.title}" lên ${parsed.progress}%`,
+      task.projectId,
+    );
+
     revalidatePath(`/tasks/${parsed.taskId}`);
   });
 }
@@ -154,7 +181,7 @@ export async function createComment(input: unknown) {
 
     const task = await db.task.findUnique({
       where: { id: parsed.taskId },
-      select: { projectId: true },
+      select: { projectId: true, title: true },
     });
     if (!task) throw new ForbiddenError("Task không tồn tại");
     await requireProjectRole(task.projectId, user, ["ADMIN", "PM", "DEV"]);
@@ -162,6 +189,14 @@ export async function createComment(input: unknown) {
     await db.comment.create({
       data: { taskId: parsed.taskId, authorId: user.id, body: parsed.body },
     });
+
+    await logActivity(
+      db,
+      user.id,
+      "COMMENT",
+      `đã bình luận trong task "${task.title}"`,
+      task.projectId,
+    );
 
     revalidatePath(`/tasks/${parsed.taskId}`);
   });
