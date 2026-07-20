@@ -4,11 +4,20 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import { FileText } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user/user-avatar";
 import { updateComment } from "@/lib/actions/task";
+import { IMAGE_MIME_TYPES, formatFileSize } from "@/lib/validation/attachment";
+
+export type CommentAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+};
 
 export function CommentItem({
   id,
@@ -17,6 +26,7 @@ export function CommentItem({
   createdAt,
   updatedAt,
   canEdit,
+  attachments = [],
 }: {
   id: string;
   authorName: string;
@@ -24,6 +34,7 @@ export function CommentItem({
   createdAt: Date;
   updatedAt: Date;
   canEdit: boolean;
+  attachments?: CommentAttachment[];
 }) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -105,6 +116,42 @@ export function CommentItem({
               >
                 Sửa
               </button>
+            )}
+          </div>
+        )}
+
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {attachments.map((file) =>
+              IMAGE_MIME_TYPES.has(file.mimeType) ? (
+                <a
+                  key={file.id}
+                  href={`/api/files/${file.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={file.fileName}
+                  className="block overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-80"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- ảnh qua route có kiểm quyền, không dùng next/image optimizer */}
+                  <img
+                    src={`/api/files/${file.id}`}
+                    alt={file.fileName}
+                    className="h-24 w-auto max-w-40 object-cover"
+                  />
+                </a>
+              ) : (
+                <a
+                  key={file.id}
+                  href={`/api/files/${file.id}`}
+                  className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm transition-colors hover:bg-muted"
+                >
+                  <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="max-w-48 truncate">{file.fileName}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatFileSize(file.size)}
+                  </span>
+                </a>
+              ),
             )}
           </div>
         )}

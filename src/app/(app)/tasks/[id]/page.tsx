@@ -28,7 +28,12 @@ export default async function TaskDetailPage({
       project: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true } },
       comments: {
-        include: { author: { select: { name: true } } },
+        include: {
+          author: { select: { name: true } },
+          attachments: {
+            select: { id: true, fileName: true, mimeType: true, size: true },
+          },
+        },
         orderBy: { createdAt: "asc" },
       },
     },
@@ -113,6 +118,7 @@ export default async function TaskDetailPage({
                 createdAt={comment.createdAt}
                 updatedAt={comment.updatedAt}
                 canEdit={user.role === "ADMIN" || comment.authorId === user.id}
+                attachments={comment.attachments}
               />
             ))}
           </div>

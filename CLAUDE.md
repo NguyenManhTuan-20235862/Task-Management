@@ -101,6 +101,8 @@ src/
       members/[id]/           # ADMIN: chi tiết 1 thành viên — project tham gia (+ task được giao nếu là Dev)
       activity/                # ADMIN: nhật ký 30 hoạt động gần nhất toàn hệ thống
     api/auth/[...nextauth]/  # Auth.js route handler
+    api/upload/              # POST multipart: tạo comment kèm file (route handler vì Server Action không nhận file)
+    api/files/[id]/          # GET download có kiểm quyền — 404 với người ngoài project
   lib/
     auth/                    # authOptions, guard.ts
     actions/                 # Server Actions: project.ts, task.ts, member.ts, activity-log.ts (helper logActivity dùng chung)
@@ -118,7 +120,7 @@ prisma/
 docker-compose.yml
 ```
 
-Route upload/download file (`api/files/[id]`, `api/upload`) chưa triển khai — xem §9 mục 6.
+Upload đính kèm: rule file (mime whitelist, 10MB, tối đa 5 file/comment) nằm ở `lib/validation/attachment.ts` — dùng chung client (pre-check) và server (check thật ở `api/upload`). Comment thuần chữ vẫn đi qua Server Action `createComment`; comment kèm file đi qua `api/upload` (multipart) — logic nghiệp vụ 2 đường phải giữ giống nhau.
 
 ---
 
