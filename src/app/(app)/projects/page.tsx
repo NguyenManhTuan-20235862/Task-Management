@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 
 import { CreateProjectDialog } from "@/components/project/create-project-dialog";
 import { ProjectCard } from "@/components/project/project-card";
+import { ProjectsBrowser } from "@/components/project/projects-browser";
 import { requireUser } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
 import { summarizeProject } from "@/lib/queries/project-summary";
@@ -61,15 +62,15 @@ export default async function ProjectsPage() {
         {user.role === "ADMIN" && <CreateProjectDialog pmOptions={pmOptions} />}
       </div>
 
-      {projects.length === 0 ? (
+      {user.role === "ADMIN" ? (
+        <ProjectsBrowser projects={projects} pmOptions={pmOptions} />
+      ) : projects.length === 0 ? (
         <div className="grid justify-items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
           <Plus className="size-8 text-muted-foreground" aria-hidden />
           <div className="grid gap-1">
             <p className="text-sm font-medium">Chưa có project nào</p>
             <p className="text-sm text-muted-foreground">
-              {user.role === "ADMIN"
-                ? "Bấm \"Tạo project\" để bắt đầu."
-                : "Bạn sẽ thấy project ở đây khi được thêm vào."}
+              Bạn sẽ thấy project ở đây khi được thêm vào.
             </p>
           </div>
         </div>
@@ -83,22 +84,6 @@ export default async function ProjectsPage() {
               tone={i}
             />
           ))}
-          {user.role === "ADMIN" && (
-            <CreateProjectDialog
-              pmOptions={pmOptions}
-              trigger={
-                <button
-                  type="button"
-                  className="grid min-h-48 place-items-center gap-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-                >
-                  <span className="flex size-9 items-center justify-center rounded-full border border-dashed border-current">
-                    <Plus className="size-4" aria-hidden />
-                  </span>
-                  Tạo dự án mới
-                </button>
-              }
-            />
-          )}
         </div>
       )}
     </div>

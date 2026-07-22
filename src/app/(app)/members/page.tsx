@@ -1,21 +1,11 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { format } from "date-fns";
 import { BarChart3, CheckSquare, Shield } from "lucide-react";
 
 import { StatCard } from "@/components/dashboard/stat-card";
 import { CreateMemberDialog } from "@/components/member/create-member-dialog";
-import { Badge } from "@/components/ui/badge";
-import { UserAvatar } from "@/components/user/user-avatar";
+import { MembersBrowser } from "@/components/member/members-browser";
 import { ForbiddenError, requireRole, requireUser } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
-
-const roleLabels = { ADMIN: "Admin", PM: "PM", DEV: "Dev" } as const;
-const roleDescriptions = {
-  ADMIN: "Quản trị toàn bộ",
-  PM: "Quản lý dự án",
-  DEV: "Lập trình viên",
-} as const;
 
 export default async function MembersPage() {
   const { user } = await requireUser();
@@ -81,63 +71,16 @@ export default async function MembersPage() {
         />
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th className="px-4 py-2.5 font-medium">Thành viên</th>
-              <th className="px-4 py-2.5 font-medium">Email</th>
-              <th className="px-4 py-2.5 font-medium">Vai trò</th>
-              <th className="px-4 py-2.5 font-medium">Dự án</th>
-              <th className="px-4 py-2.5 font-medium">Ngày tham gia</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {members.map((member) => (
-              <tr key={member.id} className={member.role !== "ADMIN" ? "hover:bg-muted/40" : undefined}>
-                <td className="px-4 py-3">
-                  {member.role === "ADMIN" ? (
-                    <div className="flex items-center gap-2.5">
-                      <UserAvatar name={member.name} size="sm" />
-                      <div className="grid gap-0">
-                        <span className="font-medium">{member.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {roleDescriptions[member.role]}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <Link
-                      href={`/members/${member.id}`}
-                      className="flex items-center gap-2.5"
-                    >
-                      <UserAvatar name={member.name} size="sm" />
-                      <div className="grid gap-0">
-                        <span className="font-medium hover:underline underline-offset-4">
-                          {member.name}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {roleDescriptions[member.role]}
-                        </span>
-                      </div>
-                    </Link>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">{member.email}</td>
-                <td className="px-4 py-3">
-                  <Badge variant="outline">{roleLabels[member.role]}</Badge>
-                </td>
-                <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                  {member.role === "ADMIN" ? "Tất cả" : member._count.memberships}
-                </td>
-                <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                  {format(member.createdAt, "dd/MM/yyyy")}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <MembersBrowser
+        members={members.map((member) => ({
+          id: member.id,
+          name: member.name,
+          email: member.email,
+          role: member.role,
+          createdAt: member.createdAt,
+          memberCount: member._count.memberships,
+        }))}
+      />
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
-import { format } from "date-fns";
 
-import { ActivityTypeBadge } from "@/components/dashboard/activity-type-badge";
+import { ActivityBrowser } from "@/components/dashboard/activity-browser";
 import { ForbiddenError, requireRole, requireUser } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
 
@@ -45,36 +44,7 @@ export default async function ActivityPage() {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="px-4 py-2.5 font-medium">Thời gian</th>
-                <th className="px-4 py-2.5 font-medium">Người thực hiện</th>
-                <th className="px-4 py-2.5 font-medium">Loại</th>
-                <th className="px-4 py-2.5 font-medium">Nội dung</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {activities.map((activity) => (
-                <tr key={activity.id}>
-                  <td className="px-4 py-3 tabular-nums whitespace-nowrap text-muted-foreground">
-                    {format(activity.createdAt, "dd/MM/yyyy HH:mm")}
-                  </td>
-                  <td className="px-4 py-3 font-medium whitespace-nowrap">
-                    {activity.actor.name}
-                  </td>
-                  <td className="px-4 py-3">
-                    <ActivityTypeBadge type={activity.type} />
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {activity.message}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ActivityBrowser activities={activities} />
       )}
     </div>
   );

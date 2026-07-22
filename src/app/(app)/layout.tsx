@@ -1,9 +1,10 @@
-import { Bell, LayoutGrid, Search } from "lucide-react";
+import { Bell, LayoutGrid } from "lucide-react";
 import type { Role } from "@prisma/client";
 
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { LogoutButton } from "@/components/auth/logout-button";
-import { Input } from "@/components/ui/input";
+import { HeaderSearchButton } from "@/components/search/header-search-button";
+import { TrackLastPath } from "@/components/search/search-return-path";
 import {
   Sidebar,
   SidebarContent,
@@ -31,6 +32,7 @@ export default async function AppLayout({
 
   return (
     <SidebarProvider>
+      <TrackLastPath />
       <Sidebar collapsible="offcanvas">
         <SidebarHeader className="gap-3 px-3 py-4">
           <div className="flex items-center gap-2.5 px-1">
@@ -75,17 +77,7 @@ export default async function AppLayout({
               className="size-4 shrink-0 text-muted-foreground md:hidden"
               aria-hidden
             />
-            <div className="relative w-full max-w-sm">
-              <Search
-                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
-                placeholder="Tìm dự án, thành viên..."
-                className="pl-8"
-                aria-label="Tìm kiếm"
-              />
-            </div>
+            <HeaderSearchButton />
           </div>
           <div className="flex items-center gap-3">
             <button
