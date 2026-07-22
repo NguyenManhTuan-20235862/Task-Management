@@ -80,7 +80,7 @@ Các quyết định thiết kế cần biết khi đụng vào schema:
 - Xoá project → cascade sang member/task/comment/attachment. **Không** cascade khi xoá User (`onDelete: Restrict` trên task/comment) — user có dữ liệu thì không xoá được.
 - `ActivityLog` ghi audit log dạng câu văn dựng sẵn (`message`, denormalized) để đọc được nguyên vẹn kể cả khi resource liên quan đã bị xoá; `projectId` chỉ là optional/`SetNull` dùng để **lọc** hoạt động theo project (mục "Hoạt động gần đây"), không phải nguồn hiển thị.
 
-Upload: chỉ nhận ảnh (`image/png|jpeg|webp|gif`) và tài liệu (`pdf`, `docx`, `xlsx`, `zip`), tối đa **10MB/file**. Tên file gốc chỉ để hiển thị; lưu bằng key ngẫu nhiên. Tải file qua route có kiểm quyền, không serve thẳng thư mục `uploads`.
+Upload: chỉ nhận ảnh (`image/png|jpeg|webp|gif`) và tài liệu (`pdf`, `docx`, `xlsx`, `zip`), tối đa **10MB/file**. Tên file gốc chỉ để hiển thị; lưu bằng key ngẫu nhiên. Tải file qua route có kiểm quyền, không serve thẳng thư mục `uploads`. Khi tải (`api/files/[id]`), `Content-Disposition` là `inline` cho ảnh và PDF (trình duyệt tự render được) và `attachment` cho `docx`/`xlsx`/`zip` (không có cách xem trực tiếp trong trình duyệt) — xem `INLINE_MIME_TYPES` ở `lib/validation/attachment.ts`. Response có `Cache-Control: private, max-age=3600` — khi đổi logic disposition, nhớ hard-refresh lúc test lại 1 file đã từng tải trước đó (browser cache lại response cũ tới 1 giờ).
 
 ---
 
@@ -93,23 +93,27 @@ src/
   app/
     (auth)/login/            # chỉ có login, không có register
     (app)/
-      page.tsx               # trang chủ theo role: Admin=tổng quan hệ thống, PM=dashboard project mình quản lý, Dev=việc của tôi
-      projects/              # ADMIN: tạo/quản lý toàn bộ; PM/DEV: chỉ project mình là thành viên
-      projects/[id]/         # chi tiết project — tab Thành viên/Task + "Hoạt động gần đây" (lọc theo project)
+      page.tsx               # trang chủ theo role: Admin=tổng quan hệ thống, PM=dashboard project mình quản lý, Dev=việc của tôi (task 2 tab Đang thực hiện/Hoàn thành + dự án của tôi)
+      projects/              # ADMIN: tạo/quản lý toàn bộ (có search/filter cục bộ); PM/DEV: chỉ project mình là thành viên
+      projects/[id]/         # chi tiết project — tab Thành viên/Task + "Hoạt động gần đây" (lọc theo project); Dev thấy thêm khối "task của tôi" tách riêng khỏi "task toàn bộ dự án"
       tasks/[id]/             # chi tiết task + tiến độ + comment
-      members/                # ADMIN: quản lý thành viên hệ thống
+      members/                # ADMIN: quản lý thành viên hệ thống (có search/filter cục bộ)
       members/[id]/           # ADMIN: chi tiết 1 thành viên — project tham gia (+ task được giao nếu là Dev)
-      activity/                # ADMIN: nhật ký 30 hoạt động gần nhất toàn hệ thống
+      activity/                # ADMIN: nhật ký 30 hoạt động gần nhất toàn hệ thống (có search/filter cục bộ)
+      search/                 # trang tìm kiếm toàn cục (nút tìm kiếm ở header link tới đây, không gõ được ở header) — tab Project/Task/Member/Activity (tab Activity chỉ Admin), mỗi tab có ô tìm riêng + dropdown filter + sort + phân trang
     api/auth/[...nextauth]/  # Auth.js route handler
     api/upload/              # POST multipart: tạo comment kèm file (route handler vì Server Action không nhận file)
     api/files/[id]/          # GET download có kiểm quyền — 404 với người ngoài project
   lib/
     auth/                    # authOptions, guard.ts
     actions/                 # Server Actions: project.ts, task.ts, member.ts, activity-log.ts (helper logActivity dùng chung)
-    validation/              # Zod schemas dùng chung client + server
-    constants/                # token màu/nhãn dùng chung: task-status, project-status, activity-type
+    queries/                 # project-summary.ts (status/avgProgress dùng chung dashboard + /projects), search.ts (4 hàm search* cho /search)
+    validation/              # Zod schemas dùng chung client + server (gồm search.ts — parse searchParams của /search)
+    constants/                # token màu/nhãn dùng chung: task-status, project-status, activity-type, role
+    utils.ts                 # cn(); stripDiacritics/searchMatchScore (tìm không dấu + xếp hạng độ giống); startOfLocalDay/endOfLocalDay/matchesLocalDateRange (lọc ngày theo giờ địa phương, tránh lệch UTC)
     db.ts                    # Prisma singleton
   components/                # UI components (shadcn/ui + component riêng của app)
+    search/                  # FilterSelect dùng chung + toàn bộ UI /search (tabs, filter bar, ô tìm riêng từng tab, nút đóng quay lại trang trước đó)
   hooks/
   types/
   proxy.ts                   # request proxy (Next.js 16) — bắt buộc đặt trong src/ khi dùng src directory
@@ -121,6 +125,10 @@ docker-compose.yml
 ```
 
 Upload đính kèm: rule file (mime whitelist, 10MB, tối đa 5 file/comment) nằm ở `lib/validation/attachment.ts` — dùng chung client (pre-check) và server (check thật ở `api/upload`). Comment thuần chữ vẫn đi qua Server Action `createComment`; comment kèm file đi qua `api/upload` (multipart) — logic nghiệp vụ 2 đường phải giữ giống nhau.
+
+Tìm kiếm: `/search` dùng chung 1 kiến trúc cho cả 4 tab — parse `searchParams` bằng Zod (`lib/validation/search.ts`) rồi gọi đúng 1 trong 4 hàm `search*` (`lib/queries/search.ts`). Cả 4 tab đều lọc/xếp hạng/phân trang **bằng JS** (không dùng Prisma `contains`/`skip`/`take`) để hỗ trợ tìm không dấu tiếng Việt + xếp hạng theo độ giống (`stripDiacritics`/`searchMatchScore`, xem §5 để biết đánh đổi). Search cục bộ ở `/projects` (Admin), `/members`, `/activity` dùng lại đúng 2 hàm tiện ích đó (client-side, không đổi URL) qua các "browser" component (`ProjectsBrowser`, `MembersBrowser`, `ActivityBrowser`) — khác hẳn `/search` (URL-based, điều hướng riêng trang).
+
+Task tab (trang chủ Dev, chi tiết project) chỉ có 2 mục **Đang thực hiện** (gộp `TODO` + `IN_PROGRESS`) và **Hoàn thành** (`DONE`) — không có tab "Tất cả", vì `TaskStatus` có 3 giá trị nên phải gộp 2 mục đầu để không có task nào biến mất khỏi UI. Trang chủ Dev giới hạn 10 task gần nhất mỗi tab, sort theo `Task.updatedAt` (không có cột riêng lưu "lần cập nhật tiến độ" — đây là proxy chấp nhận được cho quy mô hiện tại, xem thêm ở `app/(app)/page.tsx`); trang chi tiết project không giới hạn số lượng. Dev xem chi tiết project thấy thêm khối "Task của toàn bộ dự án" (mọi assignee, sort theo `createdAt`, highlight dòng của chính mình) bên dưới khối "Task của tôi".
 
 ---
 
@@ -136,6 +144,8 @@ Upload đính kèm: rule file (mime whitelist, 10MB, tối đa 5 file/comment) n
 - Component đặt tên tiếng Anh; text hiển thị cho người dùng bằng **tiếng Việt**.
 - Không commit `.env`. Mẫu biến môi trường để ở `.env.example`.
 - **Base UI `Select` (`components/ui/select.tsx`) luôn phải truyền prop `items` (map `value -> label`) vào `Select.Root`.** Thiếu prop này, `Select.Value` hiển thị raw `value` (vd. cuid) thay vì label, dù value được set qua `defaultValues` hay qua thao tác chọn thật của người dùng — đây là gotcha đã xảy ra ở cả 4 form dùng Select (`TaskDialog`, `AddPmDialog`, `AddDevDialog`, `CreateProjectDialog`).
+- **Base UI `Button` (`components/ui/button.tsx`) khi dùng `render={<Link .../>}` (hay bất kỳ phần tử không phải `<button>`) phải kèm `nativeButton={false}`.** Thiếu prop này sẽ có console warning "changing... nativeButton" — đã xảy ra ở nút "Xem tất cả" (trang chủ Dev, link sang `/projects`) và `HeaderSearchButton`.
+- **Dữ liệu nội bộ, quy mô nhỏ được phép fetch toàn bộ tập đã scope rồi lọc/sắp xếp/phân trang bằng JS** (không phân trang thật ở DB bằng `skip`/`take`) khi cần tính năng mà Prisma không làm được ở tầng query — ví dụ tìm không dấu tiếng Việt hoặc xếp hạng theo độ giống (`searchMatchScore`, `lib/utils.ts`), đang áp dụng ở `/search` (tab Task/Thành viên/Hoạt động) và search cục bộ ở `/projects`/`/members`/`/activity`. Đánh đổi: tốc độ giảm dần theo quy mô dữ liệu — cân nhắc lại (vd. Postgres `unaccent`) nếu bảng nào phình quá lớn, đặc biệt `ActivityLog` (tăng không giới hạn theo thời gian, không có mốc dọn bớt).
 - **`StatusBadge` (task) và `ProjectStatusBadge` (project) không dùng lẫn nhau** dù cùng nhận chung kiểu `TaskStatus` (project suy ra trạng thái từ tổng hợp task, xem `summarizeProject`). Nhãn hiển thị khác nhau có chủ đích — "Đang làm"/"Chưa bắt đầu" cho Task, "Đang triển khai"/"Chưa triển khai" cho Project — dùng sai component sẽ làm 2 nơi hiển thị cùng 1 trạng thái nhưng lệch chữ.
 
 ---
