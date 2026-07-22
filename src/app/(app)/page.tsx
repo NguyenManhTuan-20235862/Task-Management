@@ -293,23 +293,46 @@ async function PmDashboard({ userId }: { userId: string }) {
   );
 }
 
+const DEV_RECENT_TASKS_LIMIT = 10;
+const DEV_RECENT_PROJECTS_LIMIT = 4;
+
 // Màn hình chính của Dev (CLAUDE.md §4 "my-tasks"): chỉ task được giao cho
 // chính mình, scope ngay trong where — Dev không thấy task của Dev khác.
 async function DevDashboard({ userId }: { userId: string }) {
   const todayUtc = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
 
-  const tasksRaw = await db.task.findMany({
-    where: { assigneeId: userId },
-    select: {
-      id: true,
-      title: true,
-      status: true,
-      progress: true,
-      dueDate: true,
-      project: { select: { name: true } },
-    },
-    orderBy: { dueDate: "asc" },
-  });
+  const [tasksRaw, memberships, projectCount] = await Promise.all([
+    db.task.findMany({
+      where: { assigneeId: userId },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        progress: true,
+        dueDate: true,
+        updatedAt: true,
+        project: { select: { name: true } },
+      },
+      orderBy: { dueDate: "asc" },
+    }),
+    db.projectMember.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: DEV_RECENT_PROJECTS_LIMIT,
+      select: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            tasks: { select: { progress: true, status: true, dueDate: true } },
+            members: { select: { user: { select: { name: true, role: true } } } },
+            _count: { select: { members: true } },
+          },
+        },
+      },
+    }),
+    db.projectMember.count({ where: { userId } }),
+  ]);
 
   const overdueCount = tasksRaw.filter(
     (t) => t.status !== "DONE" && t.dueDate < todayUtc,
@@ -317,7 +340,7 @@ async function DevDashboard({ userId }: { userId: string }) {
   const inProgressCount = tasksRaw.filter((t) => t.status === "IN_PROGRESS").length;
   const doneCount = tasksRaw.filter((t) => t.status === "DONE").length;
 
-  const tasks: MyTask[] = tasksRaw.map((task) => ({
+  const toMyTask = (task: (typeof tasksRaw)[number]): MyTask => ({
     id: task.id,
     title: task.title,
     projectName: task.project.name,
@@ -325,7 +348,32 @@ async function DevDashboard({ userId }: { userId: string }) {
     progress: task.progress,
     dueDateLabel: format(task.dueDate, "dd/MM/yyyy"),
     isOverdue: task.status !== "DONE" && task.dueDate < todayUtc,
-  }));
+  });
+
+  // Không có cột riêng "lần cập nhật tiến độ gần nhất" — dùng Task.updatedAt
+  // (Prisma tự cập nhật khi bất kỳ field nào của task đổi) làm proxy, đã chốt
+  // với người dùng là chấp nhận được cho quy mô nội bộ hiện tại.
+  const byUpdatedAtDesc = (a: (typeof tasksRaw)[number], b: (typeof tasksRaw)[number]) =>
+    b.updatedAt.getTime() - a.updatedAt.getTime();
+
+  const activeTasks = tasksRaw
+    .filter((t) => t.status !== "DONE")
+    .sort(byUpdatedAtDesc)
+    .slice(0, DEV_RECENT_TASKS_LIMIT)
+    .map(toMyTask);
+  const doneTasks = tasksRaw
+    .filter((t) => t.status === "DONE")
+    .sort(byUpdatedAtDesc)
+    .slice(0, DEV_RECENT_TASKS_LIMIT)
+    .map(toMyTask);
+
+  const recentProjects = memberships.map(({ project }) => {
+    const pmMembers = project.members.filter((m) => m.user.role === "PM");
+    return {
+      ...summarizeProject({ ...project, members: pmMembers }),
+      memberCount: project._count.members,
+    };
+  });
 
   return (
     <div className="grid gap-6">
@@ -358,7 +406,47 @@ async function DevDashboard({ userId }: { userId: string }) {
         />
       </div>
 
-      <MyTasksTable tasks={tasks} />
+      <MyTasksTable
+        activeTasks={activeTasks}
+        doneTasks={doneTasks}
+        hasAnyTask={tasksRaw.length > 0}
+      />
+
+      <div className="grid gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-medium">Dự án của tôi ({projectCount})</h2>
+          {recentProjects.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link href="/projects" />}
+            >
+              Xem tất cả
+            </Button>
+          )}
+        </div>
+
+        {recentProjects.length === 0 ? (
+          <div className="grid justify-items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
+            <FolderKanban className="size-8 text-muted-foreground" aria-hidden />
+            <p className="text-sm text-muted-foreground">
+              Bạn chưa tham gia project nào. Admin sẽ thêm bạn vào project.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {recentProjects.map((project, i) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                memberCount={project.memberCount}
+                tone={i}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

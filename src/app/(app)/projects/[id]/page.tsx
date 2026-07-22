@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
-import { ArrowLeft, Pencil, Plus } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 
 import { AddDevDialog } from "@/components/project/add-dev-dialog";
 import { AddPmDialog } from "@/components/project/add-pm-dialog";
 import { ProjectActivityFeed } from "@/components/project/project-activity-feed";
 import { ProjectDetailTabs } from "@/components/project/project-detail-tabs";
 import { ProjectStatusBadge } from "@/components/project/project-status-badge";
+import { ProjectTasksTable } from "@/components/project/project-tasks-table";
 import { RemoveMemberButton } from "@/components/project/remove-member-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import { UserAvatar } from "@/components/user/user-avatar";
 import { ForbiddenError, requireProjectRole, requireUser } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
 import { summarizeProject } from "@/lib/queries/project-summary";
+import { cn } from "@/lib/utils";
 
 const ACTIVITY_LIMIT = 10;
 
@@ -52,6 +54,7 @@ export default async function ProjectDetailPage({
           progress: true,
           startDate: true,
           dueDate: true,
+          createdAt: true,
           assigneeId: true,
           assignee: { select: { name: true } },
         },
@@ -80,6 +83,7 @@ export default async function ProjectDetailPage({
   // Guard phía trên đã đảm bảo non-admin là thành viên project — PM tới được
   // đây nghĩa là PM quản lý project này.
   const isManagingPm = user.role === "PM";
+  const isDev = user.role === "DEV";
   const canManageMembers = isAdmin || isManagingPm;
 
   // Danh sách ứng viên cho dialog thêm thành viên — chỉ query khi có quyền dùng.
@@ -254,84 +258,118 @@ export default async function ProjectDetailPage({
           ))}
       </div>
 
-      {project.tasks.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Project chưa có task nào.</p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="px-4 py-2.5 font-medium whitespace-nowrap">Task</th>
-                <th className="px-4 py-2.5 font-medium whitespace-nowrap">
-                  Người thực hiện
-                </th>
-                <th className="px-4 py-2.5 font-medium whitespace-nowrap">Tiến độ</th>
-                <th className="px-4 py-2.5 font-medium whitespace-nowrap">
-                  Trạng thái
-                </th>
-                <th className="px-4 py-2.5 font-medium whitespace-nowrap">Hạn</th>
-                {isManagingPm && <th className="px-4 py-2.5" />}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {project.tasks.map((task) => (
-                <tr key={task.id} className="hover:bg-muted/40">
-                  <td className="px-4 py-3 font-medium whitespace-nowrap">
-                    <Link
-                      href={`/tasks/${task.id}`}
-                      className="hover:underline underline-offset-4"
-                    >
-                      {task.title}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <UserAvatar name={task.assignee.name} size="sm" />
-                      <span className="text-muted-foreground">
-                        {task.assignee.name}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <TaskProgress value={task.progress} className="w-32" />
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={task.status} />
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                    {format(task.dueDate, "dd/MM/yyyy")}
-                  </td>
-                  {isManagingPm && (
-                    <td className="px-4 py-3">
-                      <TaskDialog
-                        mode="edit"
-                        taskId={task.id}
-                        devOptions={assigneeOptions}
-                        devWorkload={devWorkload}
-                        initialValues={{
-                          title: task.title,
-                          description: task.description,
-                          assigneeId: task.assigneeId,
-                          startDate: task.startDate.toISOString().slice(0, 10),
-                          dueDate: task.dueDate.toISOString().slice(0, 10),
-                        }}
-                        trigger={
-                          <button
-                            type="button"
-                            aria-label={`Sửa task ${task.title}`}
-                            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                          >
-                            <Pencil className="size-3.5" aria-hidden />
-                          </button>
-                        }
-                      />
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {isDev ? (
+        <div className="grid gap-8">
+          <div className="grid gap-3">
+            <h2 className="text-sm font-medium">Task của tôi trong dự án</h2>
+            <ProjectTasksTable
+              tasks={project.tasks
+                .filter((task) => task.assigneeId === user.id)
+                .map((task) => ({
+                  id: task.id,
+                  title: task.title,
+                  description: task.description,
+                  status: task.status,
+                  progress: task.progress,
+                  startDate: task.startDate,
+                  dueDate: task.dueDate,
+                  assigneeId: task.assigneeId,
+                  assigneeName: task.assignee.name,
+                }))}
+              isManagingPm={false}
+              assigneeOptions={[]}
+              devWorkload={{}}
+              emptyMessage="Bạn chưa được giao task nào trong dự án này."
+            />
+          </div>
+
+          <div className="grid gap-3">
+            <h2 className="text-sm font-medium">Task của toàn bộ dự án</h2>
+            {project.tasks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Project chưa có task nào.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-border">
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="px-4 py-2.5 font-medium whitespace-nowrap">
+                        Task
+                      </th>
+                      <th className="px-4 py-2.5 font-medium whitespace-nowrap">
+                        Người thực hiện
+                      </th>
+                      <th className="px-4 py-2.5 font-medium whitespace-nowrap">
+                        Tiến độ
+                      </th>
+                      <th className="px-4 py-2.5 font-medium whitespace-nowrap">
+                        Trạng thái
+                      </th>
+                      <th className="px-4 py-2.5 font-medium whitespace-nowrap">Hạn</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {[...project.tasks]
+                      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+                      .map((task) => (
+                        <tr
+                          key={task.id}
+                          className={cn(
+                            "hover:bg-muted/40",
+                            task.assigneeId === user.id && "bg-primary/5",
+                          )}
+                        >
+                          <td className="px-4 py-3 font-medium whitespace-nowrap">
+                            <Link
+                              href={`/tasks/${task.id}`}
+                              className="hover:underline underline-offset-4"
+                            >
+                              {task.title}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <UserAvatar name={task.assignee.name} size="sm" />
+                              <span className="text-muted-foreground">
+                                {task.assignee.name}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <TaskProgress value={task.progress} className="w-32" />
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge status={task.status} />
+                          </td>
+                          <td className="px-4 py-3 tabular-nums text-muted-foreground">
+                            {format(task.dueDate, "dd/MM/yyyy")}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
+      ) : (
+        <ProjectTasksTable
+          tasks={project.tasks.map((task) => ({
+            id: task.id,
+            title: task.title,
+            description: task.description,
+            status: task.status,
+            progress: task.progress,
+            startDate: task.startDate,
+            dueDate: task.dueDate,
+            assigneeId: task.assigneeId,
+            assigneeName: task.assignee.name,
+          }))}
+          isManagingPm={isManagingPm}
+          assigneeOptions={assigneeOptions}
+          devWorkload={devWorkload}
+        />
       )}
     </>
   );

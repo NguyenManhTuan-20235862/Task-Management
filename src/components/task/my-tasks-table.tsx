@@ -20,18 +20,28 @@ export type MyTask = {
   isOverdue: boolean;
 };
 
+// Chỉ 2 tab (không có "Tất cả") — mỗi mảng đã được server giới hạn sẵn 10 task
+// gần nhất theo updatedAt (xem DevDashboard ở app/(app)/page.tsx), không lọc/
+// cắt lại ở client.
 const FILTERS = [
-  { value: "ALL", label: "Tất cả" },
-  { value: "IN_PROGRESS", label: "Đang thực hiện" },
+  { value: "ACTIVE", label: "Đang thực hiện" },
   { value: "DONE", label: "Hoàn thành" },
 ] as const;
 
 type FilterValue = (typeof FILTERS)[number]["value"];
 
-export function MyTasksTable({ tasks }: { tasks: MyTask[] }) {
-  const [filter, setFilter] = useState<FilterValue>("ALL");
+export function MyTasksTable({
+  activeTasks,
+  doneTasks,
+  hasAnyTask,
+}: {
+  activeTasks: MyTask[];
+  doneTasks: MyTask[];
+  hasAnyTask: boolean;
+}) {
+  const [filter, setFilter] = useState<FilterValue>("ACTIVE");
 
-  if (tasks.length === 0) {
+  if (!hasAnyTask) {
     return (
       <div className="grid justify-items-center gap-3 rounded-xl border border-border px-4 py-16 text-center">
         <CheckSquare className="size-8 text-muted-foreground" aria-hidden />
@@ -43,8 +53,7 @@ export function MyTasksTable({ tasks }: { tasks: MyTask[] }) {
     );
   }
 
-  const filtered =
-    filter === "ALL" ? tasks : tasks.filter((t) => t.status === filter);
+  const tasks = filter === "DONE" ? doneTasks : activeTasks;
 
   return (
     <div className="grid gap-4">
@@ -67,7 +76,7 @@ export function MyTasksTable({ tasks }: { tasks: MyTask[] }) {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border">
-        {filtered.length === 0 ? (
+        {tasks.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-muted-foreground">
             Không có task nào ở trạng thái này.
           </p>
@@ -83,7 +92,7 @@ export function MyTasksTable({ tasks }: { tasks: MyTask[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map((task) => (
+              {tasks.map((task) => (
                 <tr key={task.id} className="hover:bg-muted/40">
                   <td className="px-4 py-3 font-medium">
                     <Link
