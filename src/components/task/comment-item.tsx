@@ -143,6 +143,8 @@ export function CommentItem({
                 <a
                   key={file.id}
                   href={`/api/files/${file.id}`}
+                  target="_blank"
+                  rel="noreferrer"
                   className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm transition-colors hover:bg-muted"
                 >
                   <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />

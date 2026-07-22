@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { ForbiddenError, requireProjectRole } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
-import { IMAGE_MIME_TYPES } from "@/lib/validation/attachment";
+import { INLINE_MIME_TYPES } from "@/lib/validation/attachment";
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 
@@ -60,9 +60,10 @@ export async function GET(
     );
   }
 
-  // Ảnh cho hiển thị inline (thumbnail trong comment); tài liệu ép tải về.
+  // Ảnh + PDF cho hiển thị inline (trình duyệt tự render được); docx/xlsx/zip
+  // ép tải về vì không có cách xem trực tiếp trong trình duyệt.
   // filename* theo RFC 5987 để tên tiếng Việt không vỡ.
-  const disposition = IMAGE_MIME_TYPES.has(attachment.mimeType)
+  const disposition = INLINE_MIME_TYPES.has(attachment.mimeType)
     ? "inline"
     : "attachment";
   return new NextResponse(new Uint8Array(data), {

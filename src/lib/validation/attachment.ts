@@ -26,6 +26,11 @@ export const IMAGE_MIME_TYPES = new Set([
   "image/gif",
 ]);
 
+// Loại file trình duyệt tự render được (không cần tải về) khi tải qua
+// api/files/[id] — ảnh (xem IMAGE_MIME_TYPES) + PDF (trình duyệt có viewer sẵn).
+// docx/xlsx/zip không có cách render trong trình duyệt nên vẫn ép tải về.
+export const INLINE_MIME_TYPES = new Set([...IMAGE_MIME_TYPES, "application/pdf"]);
+
 // Giá trị cho thuộc tính accept của <input type="file">
 export const ACCEPT_ATTRIBUTE = Object.keys(ALLOWED_MIME_TYPES).join(",");
 
