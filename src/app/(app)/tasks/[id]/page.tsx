@@ -1,13 +1,12 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { ArrowLeft } from "lucide-react";
 
 import { CommentForm } from "@/components/task/comment-form";
 import { CommentItem } from "@/components/task/comment-item";
 import { ProgressEditor } from "@/components/task/progress-editor";
 import { StatusBadge } from "@/components/task/status-badge";
+import { TaskBackLink } from "@/components/task/task-back-link";
 import { TaskProgress } from "@/components/task/task-progress";
 import { Separator } from "@/components/ui/separator";
 import { UserAvatar } from "@/components/user/user-avatar";
@@ -56,13 +55,7 @@ export default async function TaskDetailPage({
   return (
     <div className="grid gap-8">
       <div className="grid gap-3">
-        <Link
-          href={`/projects/${task.project.id}`}
-          className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" aria-hidden />
-          {task.project.name}
-        </Link>
+        <TaskBackLink projectId={task.project.id} projectName={task.project.name} />
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">
             {task.title}

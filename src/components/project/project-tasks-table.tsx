@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { Pencil } from "lucide-react";
 import type { TaskStatus } from "@prisma/client";
@@ -46,7 +46,20 @@ export function ProjectTasksTable({
   devWorkload: Record<string, number>;
   emptyMessage?: string;
 }) {
-  const [filter, setFilter] = useState<FilterValue>("ACTIVE");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Cùng lý do với ProjectDetailTabs — giữ filter trong URL (?taskFilter=)
+  // thay vì useState, để router.back() từ task detail khôi phục đúng tab.
+  const filter: FilterValue = searchParams.get("taskFilter") === "DONE" ? "DONE" : "ACTIVE";
+
+  function setFilter(next: FilterValue) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "ACTIVE") params.delete("taskFilter");
+    else params.set("taskFilter", next);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   if (tasks.length === 0) {
     return <p className="text-sm text-muted-foreground">{emptyMessage}</p>;
